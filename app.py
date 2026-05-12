@@ -1,29 +1,34 @@
-
 import streamlit as st
 import smtplib
 import pandas as pd
-import schedule
-import threading
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 
 LOG_FILE = "email_logs.csv"
 
 st.set_page_config(page_title="Email Automation", layout="centered")
 
 st.title("📧 Email Automation System")
-
 st.markdown("Send scheduled emails using Gmail SMTP service.")
 
-sender_email = st.secrets["EMAIL_ADDRESS"]
-app_password = st.secrets["EMAIL_PASSWORD"]
+# Initialize scheduler once
+if 'scheduler' not in st.session_state:
+    st.session_state.scheduler = BackgroundScheduler()
+    st.session_state.scheduler.start()
+
+scheduler = st.session_state.scheduler
+
+sender_email = st.text_input("Your Gmail Address")
+app_password = st.text_input("Gmail App Password", type="password")
 receiver_email = st.text_input("Receiver Email")
 subject = st.text_input("Email Subject")
 message = st.text_area("Email Message")
 
 schedule_time = st.time_input("Schedule Time")
+
 
 def log_email(receiver, subject, status):
     log_data = {
@@ -41,42 +46,47 @@ def log_email(receiver, subject, status):
 
     updated.to_csv(LOG_FILE, index=False)
 
-def send_email():
+
+def send_email(sender, password, receiver, sub, body):
     try:
         msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = receiver_email
-        msg['Subject'] = subject
+        msg['From'] = sender
+        msg['To'] = receiver
+        msg['Subject'] = sub
 
-        msg.attach(MIMEText(message, 'plain'))
+        msg.attach(MIMEText(body, 'plain'))
 
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login(sender_email, app_password)
+        server.login(sender, password)
 
         server.send_message(msg)
         server.quit()
 
-        log_email(receiver_email, subject, "Success")
+        log_email(receiver, sub, "Success")
         print("Email sent successfully")
 
     except Exception as e:
-        log_email(receiver_email, subject, f"Failed: {e}")
+        log_email(receiver, sub, f"Failed: {e}")
         print(e)
 
-def scheduler():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
 
 if st.button("Schedule Email"):
-    formatted_time = schedule_time.strftime("%H:%M")
-    schedule.every().day.at(formatted_time).do(send_email)
 
-    thread = threading.Thread(target=scheduler, daemon=True)
-    thread.start()
+    run_time = schedule_time.strftime("%H:%M")
 
-    st.success(f"Email scheduled at {formatted_time}")
+    scheduler.add_job(
+        send_email,
+        trigger='cron',
+        hour=schedule_time.hour,
+        minute=schedule_time.minute,
+        args=[sender_email, app_password, receiver_email, subject, message],
+        id=f"email_{time.time()}",
+        replace_existing=False
+    )
+
+    st.success(f"✅ Email scheduled successfully at {run_time}")
+
 
 st.subheader("📜 Email History")
 
