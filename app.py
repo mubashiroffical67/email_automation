@@ -17,8 +17,8 @@ st.title("📧 Email Automation System")
 
 st.markdown("Send scheduled emails using Gmail SMTP service.")
 
-sender_email = st.text_input("Your Gmail Address")
-app_password = st.text_input("Gmail App Password", type="password")
+sender_email = st.secrets["EMAIL_ADDRESS"]
+app_password = st.secrets["EMAIL_PASSWORD"]
 receiver_email = st.text_input("Receiver Email")
 subject = st.text_input("Email Subject")
 message = st.text_area("Email Message")
